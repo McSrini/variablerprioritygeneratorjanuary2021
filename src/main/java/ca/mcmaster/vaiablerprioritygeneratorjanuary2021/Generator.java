@@ -11,8 +11,9 @@ import ilog.cplex.IloCplex;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.ObjectOutputStream; 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,8 +25,8 @@ import java.util.TreeMap;
  */
 public class Generator {
     
-    public static Map<IloNumVar, Double> upPseudoCostMap = new  HashMap<IloNumVar, Double> ();
-    public static Map<IloNumVar, Double> downPseudoCostMap = new  HashMap<IloNumVar, Double> ();
+    public static Map<IloNumVar, Double> upPseudoCostMap = Collections.synchronizedMap (new  HashMap<IloNumVar, Double> ());
+    public static Map<IloNumVar, Double> downPseudoCostMap = Collections.synchronizedMap (new  HashMap<IloNumVar, Double> ());
     
     public static void main(String[] args) throws Exception {
         IloCplex cplex = new IloCplex ();
@@ -40,16 +41,17 @@ public class Generator {
         cplex.setParam( IloCplex.Param.MIP.Strategy.Search , CPX_PARAM_MIPSEARCH);
         cplex.setParam( IloCplex.Param.Emphasis.MIP , CPX_PARAM_MIPEMPHASIS );
         cplex.setParam( IloCplex.Param.TimeLimit, TIME_LIMIT_MINUTES*SIXTY);
+        cplex.setParam( IloCplex.Param.Threads, MAX_THREADS);
         
-        cplex.use (new BranchHandler () );
+        BranchHandler bh = new BranchHandler (true);
+        cplex.use ( bh);
         cplex.solve ();
+        bh.isCollectionPhase= false;
+        cplex.setParam( IloCplex.Param.Threads, ONE);
+        cplex.solve();
         
         long endTime = System.currentTimeMillis();
         
-        for (IloNumVar var: getVarsWithNoPseudoCosts()){
-            downPseudoCostMap.remove(var);
-            upPseudoCostMap.remove(var);
-        }
         
         System.out.println ("Time taken minutes" + (endTime-startTime)/ (1000*60) ) ;
         
@@ -66,15 +68,7 @@ public class Generator {
         
     }
     
-    private static List<IloNumVar> getVarsWithNoPseudoCosts () {
-        List<IloNumVar> results = new ArrayList<IloNumVar> ();
-        for ( Map.Entry<IloNumVar, Double> entry : downPseudoCostMap.entrySet() ){
-            if (entry.getValue()== MINUS_ONE){
-                results.add (entry.getKey() );
-            }
-        }
-        return results;
-    }
+   
     
     private static String getWinningVar (){
         IloNumVar winner = null;
